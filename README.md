@@ -3,6 +3,8 @@
 
 A React Native library for accessing TensorFlow Lite API. Supports Classification, Object Detection, Deeplab and PoseNet on both iOS and Android.
 
+NOTE:  This is a fork of https://github.com/shaqian/tflite-react-native with some small updates.  The new project has been created since it appears that the upstream library is no longer actively maintained.  The changes have not been tested with iOS.  Contributions are welcome!
+
 ### Table of Contents
 
 - [Installation](#Installation)
@@ -84,7 +86,7 @@ In XCode, right click on the project folder, click **Add Files to "xxx"...**, se
 2. In `android/app/build.gradle`, add the following setting in `android` block.
 
 ```
-    aaptOptions {
+    androidResources {
         noCompress 'tflite'
     }
 ```
