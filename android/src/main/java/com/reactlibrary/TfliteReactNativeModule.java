@@ -21,6 +21,7 @@ import com.facebook.react.bridge.WritableMap;
 
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.support.image.TensorImage;
 import org.tensorflow.lite.Tensor;
 
 import java.io.BufferedReader;
@@ -101,15 +102,15 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
 
 
   private WritableArray GetTopN(int numResults, float threshold) {
-    PriorityQueue<WritableMap> pq =
-        new PriorityQueue<>(
-            1,
-            new Comparator<WritableMap>() {
-              @Override
-              public int compare(WritableMap lhs, WritableMap rhs) {
-                return Double.compare(rhs.getDouble("confidence"), lhs.getDouble("confidence"));
-              }
-            });
+      PriorityQueue<WritableMap> pq =
+          new PriorityQueue<>(
+              1,
+              new Comparator<WritableMap>() {
+                @Override
+                public int compare(WritableMap lhs, WritableMap rhs) {
+                  return Double.compare(rhs.getDouble("confidence"), lhs.getDouble("confidence"));
+                }
+              });
 
     for (int i = 0; i < labels.size(); ++i) {
       float confidence = labelProb[0][i];
@@ -170,6 +171,16 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
     return imgData;
   }
 
+  Bitmap getImgBitmap(String path) throws IOException {
+    Tensor tensor = tfLite.getInputTensor(0);
+    int inputChannels = tensor.shape()[3];
+
+    InputStream inputStream = new FileInputStream(path.replace("file://", ""));
+    Bitmap bitmapRaw = BitmapFactory.decodeStream(inputStream);
+
+    return bitmapRaw;
+  }
+
   @ReactMethod
   private void runModelOnImage(final String path, final float mean, final float std, final int numResults,
                                final float threshold, final Callback callback) throws IOException {
@@ -184,9 +195,9 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
                                    final float threshold, final int numResultsPerClass, final ReadableArray ANCHORS,
                                    final int blockSize, final Callback callback) throws IOException {
 
-    ByteBuffer imgData = feedInputTensorImage(path, mean, std);
-
     if (model.equals("SSDMobileNet")) {
+      ByteBuffer imgData = feedInputTensorImage(path, mean, std);
+
       int NUM_DETECTIONS = 10;
       float[][][] outputLocations = new float[1][NUM_DETECTIONS][4];
       float[][] outputClasses = new float[1][NUM_DETECTIONS];
@@ -204,7 +215,43 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
 
       callback.invoke(null,
           parseSSDMobileNet(NUM_DETECTIONS, numResultsPerClass, outputLocations, outputClasses, outputScores));
+    }
+    else if (model.equals("Custom")) {
+
+      int NUM_DETECTIONS = 10;  // FIXME: this should be an input variable
+      
+      float[][][] outputLocations = new float[1][NUM_DETECTIONS][4];
+      float[][] outputClasses = new float[1][NUM_DETECTIONS];
+      float[][] outputScores = new float[1][NUM_DETECTIONS];
+      float[] numDetections = new float[1];
+
+      Map<Integer, Object> outputMap = new HashMap<>();
+      
+      Bitmap imgBitmap = getImgBitmap(path);
+      Bitmap inputBitmap = Bitmap.createScaledBitmap(
+        imgBitmap,
+        imgBitmap.getWidth(),
+        imgBitmap.getHeight(),
+        true
+      );
+  
+      TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
+      tensorImage.load(inputBitmap);
+      Object[] inputArray = {tensorImage.getBuffer()};
+
+      // FIXME: this should be part of the input variables
+      outputMap.put(0, outputScores);  
+      outputMap.put(1, outputLocations);
+      outputMap.put(2, numDetections);
+      outputMap.put(3, outputClasses);
+
+      tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
+
+      callback.invoke(null,
+          parseCustom(NUM_DETECTIONS, numResultsPerClass, outputLocations, outputClasses, outputScores));
     } else {
+      ByteBuffer imgData = feedInputTensorImage(path, mean, std);
+      
       int gridSize = inputSize / blockSize;
       int numClasses = labels.size();
       final float[][][][] output = new float[1][gridSize][gridSize][(numClasses + 5) * 5];
@@ -250,6 +297,49 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
       result.putString("detectedClass", detectedClass);
 
       results.pushMap(result);
+    }
+
+    return results;
+  }
+
+  private WritableArray parseCustom(int numDetections, int numResultsPerClass, float[][][] outputLocations,
+                                          float[][] outputClasses, float[][] outputScores) {
+    Map<String, Integer> counters = new HashMap<>();
+    WritableArray results = Arguments.createArray();
+
+    for (int i = 0; i < numDetections; ++i) {
+      if (outputClasses[0][i] == (int)outputClasses[0][i]) {
+        // Value is an integer
+        String detectedClass = labels.get((int) outputClasses[0][i]);
+
+        if (counters.get(detectedClass) == null) {
+          counters.put(detectedClass, 1);
+        } else {
+          int count = counters.get(detectedClass);
+          if (count >= numResultsPerClass) {
+            continue;
+          } else {
+            counters.put(detectedClass, count + 1);
+          }
+        }
+
+        WritableMap rect = Arguments.createMap();
+        float ymin = Math.max(0, outputLocations[0][i][0]);
+        float xmin = Math.max(0, outputLocations[0][i][1]);
+        float ymax = outputLocations[0][i][2];
+        float xmax = outputLocations[0][i][3];
+        rect.putDouble("x", xmin);
+        rect.putDouble("y", ymin);
+        rect.putDouble("w", Math.min(1 - xmin, xmax - xmin));
+        rect.putDouble("h", Math.min(1 - ymin, ymax - ymin));
+
+        WritableMap result = Arguments.createMap();
+        result.putMap("rect", rect);
+        result.putDouble("confidenceInClass", outputScores[0][i]);
+        result.putString("detectedClass", detectedClass);
+
+        results.pushMap(result);
+      }
     }
 
     return results;
