@@ -171,16 +171,6 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
     return imgData;
   }
 
-  Bitmap getImgBitmap(String path) throws IOException {
-    Tensor tensor = tfLite.getInputTensor(0);
-    int inputChannels = tensor.shape()[3];
-
-    InputStream inputStream = new FileInputStream(path.replace("file://", ""));
-    Bitmap bitmapRaw = BitmapFactory.decodeStream(inputStream);
-
-    return bitmapRaw;
-  }
-
   @ReactMethod
   private void runModelOnImage(final String path, final float mean, final float std, final int numResults,
                                final float threshold, final Callback callback) throws IOException {
@@ -191,7 +181,7 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  private void detectObjectOnImage(final String path, final String model, final float mean, final float std,
+  private void detectObjectOnImage(final String path, final String imageBinary, final String model, final float mean, final float std,
                                    final float threshold, final int numResultsPerClass, final ReadableArray ANCHORS,
                                    final int blockSize, final Callback callback) throws IOException {
 
@@ -218,7 +208,7 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
     }
     else if (model.equals("Custom")) {
 
-      int NUM_DETECTIONS = 10;  // FIXME: this should be an input variable
+      int NUM_DETECTIONS = 15;  // FIXME: this should be an input variable
       
       float[][][] outputLocations = new float[1][NUM_DETECTIONS][4];
       float[][] outputClasses = new float[1][NUM_DETECTIONS];
@@ -227,13 +217,8 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
 
       Map<Integer, Object> outputMap = new HashMap<>();
       
-      Bitmap imgBitmap = getImgBitmap(path);
-      Bitmap inputBitmap = Bitmap.createScaledBitmap(
-        imgBitmap,
-        imgBitmap.getWidth(),
-        imgBitmap.getHeight(),
-        true
-      );
+      byte[] decodedString = Base64.decode(imageBinary, Base64.DEFAULT);
+      Bitmap inputBitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
   
       TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
       tensorImage.load(inputBitmap);

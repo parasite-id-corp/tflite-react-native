@@ -20,16 +20,16 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath('com.android.tools.build:gradle:7.4.2')
+        classpath("com.android.tools.build:gradle:7.2.2")
     }
 }
 
 android {
-    compileSdk 33
+    compileSdk 31
     lintOptions {
         abortOnError false
     }
-    ndkVersion '23.1.7779620'
+    ndkVersion = "21.4.7075529"
 }
 
 repositories {
@@ -38,7 +38,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.facebook.react:react-native:0.71.6'
+    implementation 'com.facebook.react:react-native:0.70.8'
     implementation 'org.tensorflow:tensorflow-lite:2.12.0'
     implementation 'org.tensorflow:tensorflow-lite-support:0.4.3'
 }
