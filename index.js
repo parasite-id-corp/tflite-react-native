@@ -28,6 +28,7 @@ class Tflite {
   detectObjectOnImage(args, callback) {
     TfliteReactNative.detectObjectOnImage(
       args['path'],
+      args['imageBinary'],  // base 64 encoded image
       args['model'] || "SSDMobileNet",
       args['imageMean'] != null ? args['imageMean'] : 127.5,
       args['imageStd'] != null ? args['imageStd'] : 127.5,
