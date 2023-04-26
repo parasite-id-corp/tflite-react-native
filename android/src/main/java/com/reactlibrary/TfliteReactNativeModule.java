@@ -21,8 +21,10 @@ import com.facebook.react.bridge.WritableMap;
 
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.support.image.TensorImage;
 import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
+import org.tensorflow.lite.support.image.TensorImage;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -41,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Vector;
+
 
 public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
 
@@ -73,8 +76,20 @@ public class TfliteReactNativeModule extends ReactContextBaseJavaModule {
     long declaredLength = fileDescriptor.getDeclaredLength();
     MappedByteBuffer buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
 
-    final Interpreter.Options tfliteOptions = new Interpreter.Options();
-    tfliteOptions.setNumThreads(numThreads);
+    // Initialize interpreter with GPU delegate
+    Interpreter.Options tfliteOptions = new Interpreter.Options();
+    CompatibilityList compatList = new CompatibilityList();
+
+    if(compatList.isDelegateSupportedOnThisDevice()){
+        // if the device has a supported GPU, add the GPU delegate
+        GpuDelegate.Options delegateOptions = compatList.getBestOptionsForThisDevice();
+        GpuDelegate gpuDelegate = new GpuDelegate(delegateOptions);
+        tfliteOptions.addDelegate(gpuDelegate);
+    } else {
+        // if the GPU is not supported, run on input number of threads
+        tfliteOptions.setNumThreads(numThreads);
+    }
+
     tfLite = new Interpreter(buffer, tfliteOptions);
 
     if (labelsPath.length() > 0) {
